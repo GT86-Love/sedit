@@ -168,6 +168,74 @@ def open_path(path):
     except Exception as e:
         msg.showerror("Open Error", str(e))
 
+# ────────────────────────────────────────────────
+# ここに元のコードから抜けた関数を復元
+# ────────────────────────────────────────────────
+
+def Exit_sedit():
+    """メインウィンドウ終了時に呼ばれる関数"""
+    if msg.askyesno("sedit", "本当に終了しますか？"):
+        try:
+            geom = root.winfo_geometry()
+            save_settings({'window_geometry': geom})
+        except Exception:
+            pass
+        root.destroy()
+
+def open_log_viewer():
+    """拡張ログファイルを表示するウィンドウ"""
+    win = tk.Toplevel(root)
+    win.title('拡張ログビュー')
+    win.geometry('900x500')
+    frm = ttk.Frame(win)
+    frm.pack(fill='both', expand=True)
+
+    log_text = sct.ScrolledText(frm, wrap='none')
+    log_text.pack(fill='both', expand=True)
+
+    def load_log():
+        if os.path.exists(LOG_PATH):
+            with open(LOG_PATH, 'r', encoding='utf-8') as lf:
+                data = lf.read()
+        else:
+            data = ''
+        try:
+            log_text.config(state='normal')
+            log_text.delete('1.0', 'end')
+            log_text.insert('1.0', data)
+            log_text.see('end')
+            log_text.config(state='disabled')
+        except Exception:
+            pass
+
+    follow_var = tk.BooleanVar(value=False)
+    follow_id = {'id': None}
+
+    def _poll():
+        load_log()
+        if follow_var.get():
+            follow_id['id'] = win.after(1000, _poll)
+
+    _poll()
+
+    btnf = ttk.Frame(win)
+    btnf.pack(fill='x')
+    ttk.Button(btnf, text='Refresh', command=load_log).pack(side='left', padx=4, pady=4)
+
+    def clear_log():
+        if os.path.exists(LOG_PATH):
+            try:
+                with open(LOG_PATH, 'w', encoding='utf-8') as lf:
+                    lf.truncate(0)
+            except Exception:
+                pass
+        load_log()
+
+    ttk.Button(btnf, text='Clear', command=clear_log).pack(side='left', padx=4)
+    ttk.Checkbutton(btnf, text='Follow', variable=follow_var).pack(side='left', padx=6)
+    ttk.Button(btnf, text='Open Log File',
+               command=lambda: open_path(LOG_PATH)).pack(side='right', padx=6)
+
 # ----------------------------------------------------------------------
 # 4.  GUI 初期化
 # ----------------------------------------------------------------------
@@ -1195,7 +1263,7 @@ def open_settings():
     lb.pack(fill='both', expand=False)
 
 # ---------- 設定メニュー ----------
-menu_par.add_command(label='設定', command=open_settings, accelerator="Ctrl+,")
+menu_par.add_command(label='設定', command=open_settings, accelerator='Ctrl+,')
 
 # ---------- 拡張機能 ----------
 EXT_DIR = os.path.join(os.path.dirname(__file__), 'extensions')
