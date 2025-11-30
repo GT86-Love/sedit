@@ -1,6 +1,6 @@
 # sedit
 This is text editor.
-# How to use
+### How to use
 linux
 ```
 git clone git@github.com:GT86-Love/sedit.git
