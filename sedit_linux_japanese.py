@@ -114,7 +114,7 @@ def remove_event_listener(event, callback=None, owner=None):
 
 
 def emit_event(event, *args, **kwargs):
-    for cb, owner, threaded in list(EVENT_LISTENERS.get(event, [] ) or []):
+    for cb, owner, threaded in list(EVENT_LISTENERS.get(event, []) or []):
         try:
             if threaded:
                 threading.Thread(target=lambda: _safe_call(cb, *args, **kwargs),
@@ -260,7 +260,7 @@ line_numbers.pack(fill='both', expand=True)
 text = tk.Text(editor_frame, wrap='none', undo=True, font=editor_font)
 vscroll = ttk.Scrollbar(editor_frame, orient='vertical',
                         command=lambda *args: (text.yview(*args), line_numbers.yview(*args)))
-text.configure(yscrollcommand=lambda *args: (vscroll.set(*args), 
+text.configure(yscrollcommand=lambda *args: (vscroll.set(*args),
                                               line_numbers.yview_moveto(args[0] if args else '0')))
 vscroll.pack(side='right', fill='y')
 text.pack(side='right', fill='both', expand=True)
@@ -1224,8 +1224,9 @@ def open_settings():
         lb.insert('end', p)
     lb.pack(fill='both', expand=False)
 
-# ---------- 設定メニュー ----------
-menu_par.add_command(label='設定', command=open_settings, accelerator='Ctrl+,')
+
+
+menu_par.add_command(label='設定', command=open_settings, accelerator='Ctrl+,')    
 
 # ---------- 拡張機能 ----------
 EXT_DIR = os.path.join(os.path.dirname(__file__), 'extensions')
@@ -1537,3 +1538,4 @@ root.bind_all('<Control-Shift-D>', lambda e: open_debugger())
 
 # ---------- メインループ ----------
 root.mainloop()
+
