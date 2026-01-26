@@ -606,10 +606,11 @@ def RunPythonThere():
                           variable=use_saved_var)
     chk.pack(anchor='w')
 
-    ttk.Label(frm, text='Command-line arguments:').pack(anchor='w', pady=(8,0))
+    ttk.Label(frm, text='Command-line arguments:').pack(anchor='w', pady=(8, 0))
     args_e = ttk.Entry(frm)
     args_e.pack(fill='x')
-    ttk.Label(frm, text='Environment variables (KEY=VALUE per line):').pack(anchor='w', pady=(8,0))
+    ttk.Label(frm, text='Environment variables (KEY=VALUE per line):').pack(
+        anchor='w', pady=(8, 0))
     env_text = sct.ScrolledText(frm, height=8)
     env_text.pack(fill='both', expand=True)
 
@@ -638,8 +639,8 @@ def RunPythonThere():
                 run_path = fp
             else:
                 src = text.get("1.0", "end-1c")
-                tf = tempfile.NamedTemporaryFile('w', delete=False,
-                                                suffix='.py', encoding='utf-8')
+                tf = tempfile.NamedTemporaryFile(
+                    'w', delete=False, suffix='.py', encoding='utf-8')
                 tf.write(src)
                 tf.close()
                 run_path = tf.name
@@ -647,6 +648,30 @@ def RunPythonThere():
         except Exception as e:
             msg.showerror('Run Error', f'Failed preparing code: {e}')
             return
+
+        # Tk 向けに出力を流す writer（スレッド安全に root.after を使って挿入する）
+        class TkWriter:
+            def __init__(self, widget):
+                self.widget = widget
+
+            def write(self, s):
+                if not s:
+                    return
+
+                def _append():
+                    try:
+                        self.widget.insert('end', s)
+                        self.widget.see('end')
+                    except Exception:
+                        pass
+
+                try:
+                    root.after(0, _append)
+                except Exception:
+                    pass
+
+            def flush(self):
+                pass
 
         def _runner(path, args_list, env_map, remove_temp):
             try:
@@ -656,46 +681,77 @@ def RunPythonThere():
                 out_text.pack(fill='both', expand=True)
                 out_text.insert('end', f'Running: {path} {" ".join(args_list)}\n\n')
                 out_text.see('end')
-                env = os.environ.copy()
-                env.update(env_map)
-                cmd = _get_python_cmd() + [path] + args_list
-                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
-                                        stderr=subprocess.STDOUT, bufsize=1,
-                                        text=True, env=env)
-                for line in proc.stdout:
-                    out_text.insert('end', line)
-                    out_text.see('end')
-                proc.wait()
-                out_text.insert('end',
-                                f"\nProcess exited with code {proc.returncode}\n")
-                out_text.see('end')
+
+                # 保存前の argv と環境を保存
+                old_argv = sys.argv[:]
+                old_env = os.environ.copy()
+
+                # 書き込み先を TkWriter に差し替えて逐次表示
+                writer = TkWriter(out_text)
+                try:
+                    sys.argv = [path] + args_list
+                    os.environ.update(env_map or {})
+
+                    from contextlib import redirect_stdout, redirect_stderr
+                    import runpy
+                    import traceback
+
+                    with redirect_stdout(writer), redirect_stderr(writer):
+                        if os.path.exists(path):
+                            try:
+                                runpy.run_path(path, run_name="__main__")
+                            except SystemExit as e:
+                                print(f"SystemExit: {e}")
+                            except Exception:
+                                traceback.print_exc()
+                        else:
+                            print(f"Script not found: {path}")
+                finally:
+                    # 後処理：argv, env を戻す
+                    try:
+                        sys.argv = old_argv
+                    except Exception:
+                        pass
+                    try:
+                        os.environ.clear()
+                        os.environ.update(old_env)
+                    except Exception:
+                        pass
+
+                    if remove_temp:
+                        try:
+                            os.remove(path)
+                        except Exception:
+                            pass
+
+                    def _final_msg():
+                        out_text.insert('end', f"\nProcess finished.\n")
+                        out_text.see('end')
+
+                    try:
+                        root.after(0, _final_msg)
+                    except Exception:
+                        pass
             except Exception as e:
                 try:
                     msg.showerror('Run Error', str(e))
                 except Exception:
                     pass
-            finally:
-                if remove_temp:
-                    try:
-                        os.remove(path)
-                    except Exception:
-                        pass
 
         try:
             args_list = shlex.split(args_str) if args_str else []
         except Exception:
             args_list = []
 
-        th = threading.Thread(target=_runner, args=(run_path, args_list,
-                                                    env_overrides, use_temp),
-                              daemon=True)
+        th = threading.Thread(target=_runner, args=(
+            run_path, args_list, env_overrides, use_temp), daemon=True)
         th.start()
         opts.destroy()
 
-    btns = ttk.Frame(frm)
-    btns.pack(fill='x', pady=6)
-    ttk.Button(btns, text='Run', command=start_run).pack(side='right', padx=6)
-    ttk.Button(btns, text='Cancel', command=opts.destroy).pack(side='right')
+    btnf = ttk.Frame(opts)
+    btnf.pack(fill='x', pady=8)
+    ttk.Button(btnf, text='Run', command=start_run).pack(side='right', padx=6)
+    ttk.Button(btnf, text='Cancel', command=opts.destroy).pack(side='right')
 
 # ---------- GUI ビルダー ----------
 def open_gui_builder():
